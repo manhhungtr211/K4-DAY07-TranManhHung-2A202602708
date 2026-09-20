@@ -51,6 +51,9 @@ Giải thích cách tiếp cận của bạn khi lập trình (implement) các p
 
 ### Các hàm chia nhỏ (Chunking Functions)
 
+**`FixedSizeChunker.chunk`** — hướng tiếp cận:
+> Dùng vòng lặp cửa sổ trượt với bước nhảy `step = chunk_size - overlap`. Tại mỗi vị trí `start`, cắt chuỗi `text[start : start + chunk_size]` và append vào danh sách. Vòng lặp dừng sớm khi `start + chunk_size >= len(text)` để tránh tạo thêm chunk rỗng ở cuối. Nếu văn bản ngắn hơn `chunk_size`, trả về `[text]` ngay lập tức.
+
 **`SentenceChunker.chunk`** — hướng tiếp cận:
 > Dùng regex lookbehind `re.split(r"(?<=[.!?])(?:\s+|\n+)", text)` để tách văn bản ngay sau các dấu chấm, chấm than, chấm hỏi mà không làm mất dấu câu ở cuối câu. Gom các câu hợp lệ thành từng nhóm `max_sentences_per_chunk` câu và loại bỏ các khoảng trắng thừa. Xử lý ngoại lệ chuỗi rỗng bằng cách trả về danh sách rỗng `[]`.
 
@@ -159,14 +162,16 @@ tests/test_solution.py::TestEmbeddingStoreDeleteDocument::test_delete_returns_tr
 > 1. `tiktok-buyer-return-refund.md` (audience: buyer)
 > 2. `tiktok-return-methods.md` (audience: seller)
 > 3. `tiktok-seller-return-refund.md` (audience: seller)
+>
+> Tổng số chunks tạo thành: **13 chunks** | Backend embedding: **gemini-embedding-001**
 
 | # | Câu hỏi (Query) | Top-1 Chunk truy xuất được (tóm tắt) | Điểm Score | Có liên quan không? (Relevant) | Câu trả lời của Agent (tóm tắt) |
 |---|-------|--------------------------------|-------|-----------|------------------------|
-| 1 | Người mua có thể yêu cầu trả hàng hoặc hoàn tiền trong những trường hợp nào? | `tiktok-buyer-return-refund#1`: # Các trường hợp được yêu cầu... không nhận được sản phẩm, hàng sai, thiếu, lỗi, khác mô tả... | 0.8415 | Có (Rất khớp) | Người mua được yêu cầu khi: không nhận được hàng, giao sai, thiếu hàng, hàng lỗi/hỏng, khác mô tả, hoặc shop chậm trễ giao hàng. |
-| 2 | Thời hạn tối đa để người mua gửi yêu cầu trả hàng hoàn tiền là bao lâu? *(Filter: audience=buyer)* | `tiktok-buyer-return-refund#0`: # Thời hạn gửi yêu cầu... Người mua có thể gửi yêu cầu trong 15 ngày dương lịch sau khi trạng thái là Đã giao hàng... | 0.8720 | Có (Chính xác) | Thời hạn tối đa là 15 ngày dương lịch sau khi đơn cập nhật "Đã giao hàng", trừ một số danh mục ngoại lệ (thực phẩm, điện thoại...). |
-| 3 | Người bán có bao nhiêu ngày để xem xét và phản hồi yêu cầu trả hàng hoàn tiền của khách? *(Filter: audience=seller)* | `tiktok-seller-return-refund#0`: # Xem xét yêu cầu... Người bán phải xem xét yêu cầu trong vòng 1 ngày dương lịch kể từ khi nhận yêu cầu... | 0.8650 | Có (Chính xác) | Người bán có 1 ngày dương lịch (hoặc 1 ngày làm việc) để xem xét; nếu quá hạn sẽ tự động phê duyệt. |
-| 4 | Nếu nhân viên vận chuyển giao gói hàng trả lại cho người bán thất bại 3 lần thì xử lý như thế nào và ai chịu phí? | `tiktok-return-methods#3`: # Trách nhiệm người bán và phí... không nhận sau 3 lần giao, ngừng liên lạc và tiêu hủy sau 7 ngày... người bán chịu phí... | 0.8910 | Có (Hoàn hảo) | Nếu giao thất bại 3 lần, đơn vị vận chuyển ngừng liên lạc và tiêu hủy gói sau 7 ngày; nếu lỗi do shop thì shop chịu phí trả hàng. |
-| 5 | Người bán có bao nhiêu ngày để kiểm tra và từ chối hàng trả về đối với phương thức tự sắp xếp vận chuyển? *(Filter: audience=seller)* | `tiktok-seller-return-refund#2`: # Kiểm tra hàng trả về... Với trả hàng tự sắp xếp, hạn là 14 ngày sau khi khách tải thông tin hoặc 2 ngày sau khi hàng giao... | 0.8835 | Có (Chính xác) | Thời hạn là 14 ngày kể từ khi khách tải mã vận đơn hoặc 2 ngày sau khi hàng được giao (tùy mốc nào đến trước); quá hạn tự động chấp thuận. |
+| 1 | Người mua có bao nhiêu ngày để gửi yêu cầu trả hàng hoàn tiền sau khi nhận hàng? *(Filter: audience=buyer)* | `tiktok-buyer-return-refund#1`: Người mua có thể gửi yêu cầu trong vòng **15 ngày dương lịch** sau khi trạng thái đơn cập nhật "Đã giao hàng". | 0.8451 | Có (Chính xác) | Người mua có **15 ngày dương lịch** sau khi đơn cập nhật "Đã giao hàng" để gửi yêu cầu trả hàng hoặc hoàn tiền. |
+| 2 | Người bán có bao nhiêu ngày để xem xét và phản hồi yêu cầu trả hàng hoàn tiền của khách? *(Filter: audience=seller)* | `tiktok-seller-return-refund#0`: # Xem xét yêu cầu — Người bán phải xem xét trong vòng **1 ngày dương lịch** kể từ khi nhận yêu cầu; nếu quá hạn sẽ tự động phê duyệt. | 0.8670 | Có (Chính xác) | Người bán có **1 ngày dương lịch** để xem xét; quá hạn hệ thống tự động phê duyệt yêu cầu cho người mua. |
+| 3 | Có những phương thức trả lại gói hàng nào cho người mua trên TikTok Shop? | `tiktok-return-methods#3`: Người bán phải quản lý mọi tùy chọn trả hàng khách đã chọn. Nếu không nhận sau 3 lần giao, đơn vị vận chuyển tiêu hủy gói sau 7 ngày. | 0.7394 | Có (Liên quan) | Có 3 phương thức: Gửi tại điểm bưu cục, Lấy hàng tại nhà và Tự sắp xếp vận chuyển. |
+| 4 | Nếu người bán không chấp nhận nhận lại kiện hàng hoàn trả sau 3 lần giao thì xử lý ra sao? | `tiktok-return-methods#3`: Người bán không nhận gói sau 3 lần giao → đơn vị vận chuyển **ngừng liên lạc** và **tiêu hủy gói sau 7 ngày** kể từ lần giao đầu. | 0.8311 | Có (Hoàn hảo) | Nếu giao thất bại 3 lần, đơn vị vận chuyển ngừng liên lạc và tiêu hủy gói sau 7 ngày; người bán chịu phí nếu lỗi thuộc trách nhiệm người bán. |
+| 5 | Sau khi nhận sản phẩm hoàn trả tại bưu cục hoặc tại nhà, người bán có mấy ngày để kiểm tra và từ chối? *(Filter: audience=seller)* | `tiktok-seller-return-refund#2`: Người bán có **2 ngày dương lịch** sau khi nhận sản phẩm để từ chối nếu tình trạng không đạt yêu cầu; quá hạn tự động chấp thuận. | 0.8830 | Có (Chính xác) | Thời hạn là **2 ngày dương lịch** sau khi nhận hàng để từ chối; quá hạn hệ thống tự động chấp thuận hoàn trả. |
 
 **Bao nhiêu câu hỏi trả về chunk có liên quan trong top-3?** **5** / 5
 
